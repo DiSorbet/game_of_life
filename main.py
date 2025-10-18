@@ -15,6 +15,17 @@ def create_grid(rows, cols):
     return grid
 
 
+def count_population(grid):
+    return sum(sum(row) for row in grid)
+
+
+def get_population_stats(grid):
+    total_cells = len(grid) * len(grid[0])
+    alive = count_population(grid)
+    percentage = (alive / total_cells) * 100 if total_cells > 0 else 0
+    return alive, total_cells, percentage
+
+
 # Отрисовываем поле
 def print_grid(grid):
     # Преобразуем числа в символы
@@ -79,18 +90,23 @@ def next_generation(grid):
 def main(stdscr):
     # инициализация цветов
     curses.start_color()
-    curses.init_pair(1, curses.COLOR_GREEN, curses.COLOR_BLACK)
+    curses.init_pair(1, curses.COLOR_GREEN, curses.COLOR_BLACK),  # живые клетки
+    curses.init_pair(2, curses.COLOR_CYAN, curses.COLOR_BLACK),  # cтатистика
+    curses.init_pair(3, curses.COLOR_YELLOW, curses.COLOR_BLACK)  # график
 
     curses.curs_set(0)  # Скрываем курсор
     stdscr.nodelay(1)  # Неблокирующий ввод
     stdscr.timeout(100)
 
     max_y, max_x = stdscr.getmaxyx()
-    rows, cols = min(20, max_y - 3), min(40, max_x - 2)
+    rows, cols = min(20, max_y - 8), min(40, max_x - 2)
     grid = create_grid(rows, cols)
     generation = 0
     speed = 0.1  # initial speed
     paused = False  # pause flag
+
+    # для статистики
+    max_population = rows * cols
 
     speed_levels = [
         (0.01, "MAX 🚀"),
@@ -111,11 +127,16 @@ def main(stdscr):
     while True:
         stdscr.clear()
 
-        # Заголовок и информация
+        # Статистика населения
+        alive, total, percentage = get_population_stats(grid)
+
+        # Заголовок и стстистика
         status = 'PAUSED' if paused else 'RUNNING'
         cur_speed_value, cur_speed_name = get_cur_speed()
+
         stdscr.addstr(0, 0, f"🎮 GAME OF LIFE | Gen: {generation} | Speed: {cur_speed_name}| Status {status}")
-        stdscr.addstr(1, 0, f"Controls: [q]uit, [SPACE]pause,[+]faster, [-]slower, [r]eset")
+        stdscr.addstr(1, 0, f"🧬 POPULATION: {alive}/{total} ({percentage:.1f}%)", curses.color_pair(2))
+        stdscr.addstr(2, 0, f"Controls: [q]uit, [SPACE]pause,[+]faster, [-]slower, [r]eset")
 
         # Рисуем поле
         for i in range(rows):
