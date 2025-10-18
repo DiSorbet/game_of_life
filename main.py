@@ -1,7 +1,7 @@
 import curses
-import os
 import random
 import time
+from patterns import *
 
 
 # Создаем поле
@@ -99,7 +99,7 @@ def main(stdscr):
     stdscr.timeout(100)
 
     max_y, max_x = stdscr.getmaxyx()
-    rows, cols = min(20, max_y - 8), min(40, max_x - 2)
+    rows, cols = min(20, max_y - 10), min(40, max_x - 2)
     grid = create_grid(rows, cols)
     generation = 0
     speed = 0.1  # initial speed
@@ -136,15 +136,17 @@ def main(stdscr):
 
         stdscr.addstr(0, 0, f"🎮 GAME OF LIFE | Gen: {generation} | Speed: {cur_speed_name}| Status {status}")
         stdscr.addstr(1, 0, f"🧬 POPULATION: {alive}/{total} ({percentage:.1f}%)", curses.color_pair(2))
-        stdscr.addstr(2, 0, f"Controls: [q]uit, [SPACE]pause,[+]faster, [-]slower, [r]eset")
+        stdscr.addstr(2, 0, f"Controls: [q]uit, [SPACE]pause,[+]faster, [-]slower, [r]eset, [0]clear")
+        stdscr.addstr(3, 0, "🔧 PATTERNS: [1]glider [2]spaceship [3]pulsar [4]glider gun")
+        stdscr.addstr(4, 0, "           [5]block [6]blinker")
 
         # Рисуем поле
         for i in range(rows):
             for j in range(cols):
                 if grid[i][j] == 1:
-                    stdscr.addstr(i + 3, j * 2, "██", curses.color_pair(1))
+                    stdscr.addstr(i + 6, j * 2, "██", curses.color_pair(1))
                 else:
-                    stdscr.addstr(i + 3, j * 2, "  ")
+                    stdscr.addstr(i + 6, j * 2, "  ")
         stdscr.refresh()
 
         # Обработка клавиш
@@ -162,6 +164,23 @@ def main(stdscr):
             generation = 0
             cur_speed_index = 3
             paused = False
+
+        # Паттерны
+        elif key == ord('1'):
+            add_glider(grid, rows//2, cols//2)
+        elif key == ord('2'):
+            add_lightweight_spaceship(grid, rows//2, cols//2 )
+        elif key == ord('3'):
+            add_pulsar(grid, max(0, rows//2 -6), max(0, cols//2 -6))
+        elif key == ord('4'):
+            add_gosper_glider_gun(grid, max(0, rows//2 - 4), max(0, cols //2 - 18))
+        elif key == ord('5'):
+            add_block(grid, rows // 2, cols // 2)
+        elif key == ord('6'):
+            add_blinker(grid, rows // 2, cols // 2)
+        elif key == ord('0'):
+            grid = [[0 for _ in range(cols)] for _ in range(rows)]
+            generation = 0
 
         # Обновляем поколение, если не на паузе
         if not paused:
