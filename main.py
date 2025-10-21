@@ -1,194 +1,72 @@
 import curses
-import random
 import time
+
+from game_logic import create_grid, get_population_stats, next_generation
 from patterns import *
-
-
-# Создаем поле
-def create_grid(rows, cols):
-    grid = []
-    for i in range(rows):
-        row = []
-        for j in range(cols):
-            row.append(1 if random.random() < 0.2 else 0)
-        grid.append(row)
-    return grid
-
-
-def count_population(grid):
-    return sum(sum(row) for row in grid)
-
-
-def get_population_stats(grid):
-    total_cells = len(grid) * len(grid[0])
-    alive = count_population(grid)
-    percentage = (alive / total_cells) * 100 if total_cells > 0 else 0
-    return alive, total_cells, percentage
-
-
-# Отрисовываем поле
-def print_grid(grid):
-    # Преобразуем числа в символы
-    for row in grid:
-        display_row = []
-        for cell in row:
-            if cell == 1:
-                display_row.append('\033[92m■\033[0m')  # живая клетка
-            else:
-                display_row.append(' ')  # мертвая клетка
-        print('|' + ''.join(display_row) + '|')
-
-
-# считаем соседей
-def count_neighbors(grid, row, col):
-    rows = len(grid)  # к-во строк в grid
-    cols = len(grid[0])  # к-во столбцов в grid (длина первой строки)
-    count = 0
-
-    # Проверяем все 8 соседних клеток
-    for i in range(-1, 2):
-        for j in range(-1, 2):
-            # Пропускаем саму клетку
-            if i == 0 and j == 0:
-                continue
-
-            # вычисляем координаты соседа
-            neighbor_row = (row + i) % rows
-            neighbor_col = (col + j) % cols
-
-            # если сосед живой, увеличиваем счетчик
-            if grid[neighbor_row][neighbor_col] == 1:
-                count += 1
-    return count
-
-
-# next generation
-def next_generation(grid):
-    # rules
-    # 1.Живая клетка с 2-3 соседями выживает, иначе умирает
-    # 2. Мертвая клетка с 3 соседями оживает
-    rows = len(grid)
-    cols = len(grid[0])
-    new_grid = create_grid(rows, cols)
-
-    for i in range(rows):
-        for j in range(cols):
-            neighbors = count_neighbors(grid, i, j)
-            if grid[i][j] == 1:
-                if neighbors in [2, 3]:
-                    new_grid[i][j] = 1
-                else:
-                    new_grid[i][j] = 0
-            else:  # если клетка мертвая
-                if neighbors == 3:
-                    new_grid[i][j] = 1  # оживает
-                else:
-                    new_grid[i][j] = 0  # остается мертвой
-    return new_grid
+from ui_components import GameUI
+from input_handler import InputHandler
 
 
 def main(stdscr):
-    # инициализация цветов
-    curses.start_color()
-    curses.init_pair(1, curses.COLOR_GREEN, curses.COLOR_BLACK),  # живые клетки
-    curses.init_pair(2, curses.COLOR_CYAN, curses.COLOR_BLACK),  # cтатистика
-    curses.init_pair(3, curses.COLOR_YELLOW, curses.COLOR_BLACK)  # график
+    ui = GameUI()
+    ui.setup_colors(stdscr)
 
     curses.curs_set(0)  # Скрываем курсор
     stdscr.nodelay(1)  # Неблокирующий ввод
     stdscr.timeout(100)
 
+    # Настройка размера
     max_y, max_x = stdscr.getmaxyx()
     rows, cols = min(20, max_y - 10), min(40, max_x - 2)
+
+    # Инициализация игры
     grid = create_grid(rows, cols)
     generation = 0
     speed = 0.1  # initial speed
     paused = False  # pause flag
+    input_handler = InputHandler(rows, cols)
 
-    # для статистики
-    max_population = rows * cols
-
-    speed_levels = [
-        (0.01, "MAX 🚀"),
-        (0.02, "VERY FAST"),
-        (0.05, "FAST"),
-        (0.1, "NORMAL"),
-        (0.2, "SLOW"),
-        (0.5, "VERY SLOW"),
-        (1.0, "🐢"),
-        (2.0, "MAX SLOW")
-    ]
-
-    cur_speed_index = 3
-
-    def get_cur_speed():
-        return speed_levels[cur_speed_index]
-
+    # Главный цикл
     while True:
         stdscr.clear()
 
-        # Статистика населения
-        alive, total, percentage = get_population_stats(grid)
-
-        # Заголовок и стстистика
+        # Отрисовка
+        population_stats = get_population_stats(grid)
+        speed_value, speed_name = ui.get_current_speed()
         status = 'PAUSED' if paused else 'RUNNING'
-        cur_speed_value, cur_speed_name = get_cur_speed()
 
-        stdscr.addstr(0, 0, f"🎮 GAME OF LIFE | Gen: {generation} | Speed: {cur_speed_name}| Status {status}")
-        stdscr.addstr(1, 0, f"🧬 POPULATION: {alive}/{total} ({percentage:.1f}%)", curses.color_pair(2))
-        stdscr.addstr(2, 0, f"Controls: [q]uit, [SPACE]pause,[+]faster, [-]slower, [r]eset, [0]clear")
-        stdscr.addstr(3, 0, "🔧 PATTERNS: [1]glider [2]spaceship [3]pulsar [4]glider gun")
-        stdscr.addstr(4, 0, "           [5]block [6]blinker")
-
-        # Рисуем поле
-        for i in range(rows):
-            for j in range(cols):
-                if grid[i][j] == 1:
-                    stdscr.addstr(i + 6, j * 2, "██", curses.color_pair(1))
-                else:
-                    stdscr.addstr(i + 6, j * 2, "  ")
+        ui.draw_header(stdscr, generation, speed_name, status, population_stats)
+        ui.draw_grid(stdscr, grid)
         stdscr.refresh()
 
-        # Обработка клавиш
+        # Обработка ввода
         key = stdscr.getch()
-        if key == ord('q'):
-            break
-        elif key == ord(' '):  # Пробел - пауза/продолжить
-            paused = not paused
-        elif key == ord('+') or key == ord('='):  # увеличить скорость
-            cur_speed_index = max(0, cur_speed_index - 1)
-        elif key == ord('_') or key == ord('-'):
-            cur_speed_index = min(len(speed_levels) - 1, cur_speed_index + 1)
-        elif key == ord('r'):
-            grid = create_grid(rows, cols)
-            generation = 0
-            cur_speed_index = 3
-            paused = False
+
+        # Управление
+        if key in [ord('+'), ord('=')]:
+            ui.increase_speed()
+        elif key in [ord('-'), ord('_')]:
+            ui.decrease_speed()
 
         # Паттерны
-        elif key == ord('1'):
-            add_glider(grid, rows//2, cols//2)
-        elif key == ord('2'):
-            add_lightweight_spaceship(grid, rows//2, cols//2 )
-        elif key == ord('3'):
-            add_pulsar(grid, max(0, rows//2 -6), max(0, cols//2 -6))
-        elif key == ord('4'):
-            add_gosper_glider_gun(grid, max(0, rows//2 - 4), max(0, cols //2 - 18))
-        elif key == ord('5'):
-            add_block(grid, rows // 2, cols // 2)
-        elif key == ord('6'):
-            add_blinker(grid, rows // 2, cols // 2)
-        elif key == ord('0'):
-            grid = [[0 for _ in range(cols)] for _ in range(rows)]
-            generation = 0
+        grid, new_generation = input_handler.handle_pattern_key(key, grid)
+        if new_generation is not None:
+            generation = new_generation
 
-        # Обновляем поколение, если не на паузе
+        # Основные контролы
+        action, paused, generation = input_handler.handle_control_key(key, paused, generation)
+        if action == 'quit':
+            break
+        elif action == 'reset':
+            grid = create_grid(rows, cols)
+            ui.reset_speed()
+
+        # Обновление игры
         if not paused:
             grid = next_generation(grid)
             generation += 1
-            time.sleep(cur_speed_value)
+            time.sleep(ui.get_current_speed()[0])
         else:
-            # Если на паузе, небольшая задержка чтобы не грузить процессор
             time.sleep(0.1)
 
 
